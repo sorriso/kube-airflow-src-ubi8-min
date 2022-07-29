@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-flower-deployment
+  namespace: default
+  labels:
+    app: airflow-flower
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-flower
+  template:
+    metadata:
+      labels:
+        app: airflow-flower
+    spec:
+#      securityContext:
+#          fsGroup: 2000
+#          fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: flower
+          image: l_airflow:latest
+          args:
+          - celery
+          - flower
+          ports:
+            - containerPort: 5555
+              protocol: TCP
+          imagePullPolicy: Never
+          securityContext:
+             runAsUser: 1001
+             runAsGroup: 0
+#             runAsNonRoot: true
+#             allowPrivilegeEscalation: false
+#             readOnlyRootFilesystem: false
+#             capabilities:
+#               drop:
+#                 - all
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 10m
+              memory: 256Mi
+          env:
+          - name: AIRFLOW__CORE__LOAD_EXAMPLES
+            value: 'False'
+          - name: AIRFLOW__LOGGING__FAB_LOGGING_LEVEL
+            value: 'CRITICAL'
+          - name: AIRFLOW__LOGGING__LOGGING_LEVEL
+            value: 'CRITICAL'
+          - name : AIRFLOW__CORE__EXECUTOR
+            value: CeleryExecutor
+          - name: AIRFLOW__init__ENABLE_PROXY_FIX
+            value: 'True'
+          - name: _AIRFLOW_DB_UPGRADE
+            value: 'True'
+          - name: AIRFLOW__CELERY__BROKER_URL
+            valueFrom:
+              secretKeyRef:
+                key: CELERY_BROKER_URL_KEY
+                name: airflow-secret
+          - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+            valueFrom:
+              secretKeyRef:
+                key: SQL_ALCHEMY_CONN_KEY
+                name: airflow-secret
+          - name: AIRFLOW__CELERY__RESULT_BACKEND
+            valueFrom:
+              secretKeyRef:
+                key: CELERY_RESULT_BACKEND_KEY
+                name: airflow-secret
+          - name: AIRFLOW__CORE__FERNET_KEY
+            valueFrom:
+              secretKeyRef:
+                key: FERNET_KEY_KEY
+                name: airflow-secret
+          - name: AIRFLOW_HOME
+            value: "/opt/airflow"
+          - name: HOME
+            value: "/opt/airflow"
+          volumeMounts:
+            - mountPath: "/opt/airflow/dags"
+              name: airflow-dags-volume-init
+            - mountPath: "/opt/airflow/logs"
+              name: airflow-log-volume-init
+      volumes:
+        - name: airflow-dags-volume-init
+          persistentVolumeClaim:
+            claimName: airflow-dags-volume-claim
+        - name: airflow-log-volume-init
+          persistentVolumeClaim:
+            claimName: airflow-logs-volume-claim
+        - name: postgres-init
+          secret:
+            secretName: airflow-secret

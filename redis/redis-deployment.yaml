@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: default
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+#      securityContext:
+#          fsGroup: 2000
+#          fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: redis
+          image: redis:7.0.4-bullseye
+          imagePullPolicy: Never
+#          securityContext:
+#             runAsUser: 999 #70
+#             runAsGroup: 999 #70
+#             runAsNonRoot: true
+#             allowPrivilegeEscalation: false
+#             readOnlyRootFilesystem: false
+#             capabilities:
+#               drop:
+#                 - all
+          command:
+            - redis-server
+            - "/config/redis.conf"
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            failureThreshold: 6
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 5
+          ports:
+          - containerPort: 6379
+            protocol: TCP
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 512Mi
+          env:
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data/
+            - name: redis-config
+              mountPath: /config/redis.conf
+              subPath: REDIS-CONFIG
+              readOnly: true
+            - name: redis-config
+              mountPath: /config/users.acl
+              subPath: ACL-CONFIG
+              readOnly: true
+      volumes:
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-volume-claim
+        - name: redis-config
+          secret:
+            secretName: redis-secret
